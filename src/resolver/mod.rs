@@ -15,15 +15,24 @@ pub mod doh;
 // DnsCache is just the DashMap, not Arc
 pub type DnsCache = DashMap<String, (Vec<u8>, Instant)>;
 
-pub fn start(_config: &Config, blocklist: &Blocklist) {
+pub fn start(config: &Config, blocklist: &Blocklist) {
     let cache: Arc<DnsCache> = Arc::new(DashMap::new());
     let blocklist_arc: Arc<Blocklist> = Arc::new(blocklist.clone());
     println!("Starting DNS resolver...");
 
-    // dot/doh/udp all expect Arc<Blocklist>, Arc<DnsCache>
-    tokio::spawn(dot::run_dot_server(blocklist_arc.clone(), cache.clone()));
-    tokio::spawn(doh::run_doh_server(blocklist_arc.clone(), cache.clone()));
-    tokio::spawn(udp::run_udp_server(blocklist_arc.clone(), cache.clone()));
+    let enable_udp = config.enable_udp.unwrap_or(true); // default true
+    let enable_dot = config.enable_dot.unwrap_or(false);
+    let enable_doh = config.enable_doh.unwrap_or(false);
+
+    if enable_udp {
+        tokio::spawn(udp::run_udp_server(blocklist_arc.clone(), cache.clone()));
+    }
+    if enable_dot {
+        tokio::spawn(dot::run_dot_server(blocklist_arc.clone(), cache.clone()));
+    }
+    if enable_doh {
+        tokio::spawn(doh::run_doh_server(blocklist_arc.clone(), cache.clone()));
+    }
 }
 
 // DNSSEC validator stub

@@ -9,6 +9,9 @@ pub struct Config {
     pub upstream_addr: String,
     pub tls_cert: Option<PathBuf>,
     pub tls_key: Option<PathBuf>,
+    pub enable_udp: Option<bool>,
+    pub enable_dot: Option<bool>,
+    pub enable_doh: Option<bool>,
     // Add more settings as needed
 }
 
