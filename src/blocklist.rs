@@ -14,17 +14,30 @@ pub struct Blocklist {
 }
 
 impl Blocklist {
-    /// Loads domains from a list of blocklist files
-    pub fn load(paths: &[PathBuf]) -> Self {
+    /// Loads domains from a list of blocklist URLs or files
+    pub async fn load(sources: &[String]) -> Self {
         let mut domains = HashSet::new();
-        for path in paths {
-            if let Ok(file) = File::open(path) {
-                let reader = BufReader::new(file);
-                for line in reader.lines() {
-                    if let Ok(domain) = line {
-                        let domain = domain.trim();
-                        if !domain.is_empty() && !domain.starts_with('#') {
-                            domains.insert(domain.to_string());
+        for src in sources {
+            if src.starts_with("http://") || src.starts_with("https://") {
+                if let Ok(resp) = reqwest::get(src).await {
+                    if let Ok(text) = resp.text().await {
+                        for line in text.lines() {
+                            let domain = line.trim();
+                            if !domain.is_empty() && !domain.starts_with('#') {
+                                domains.insert(domain.to_string());
+                            }
+                        }
+                    }
+                }
+            } else {
+                if let Ok(file) = File::open(src) {
+                    let reader = BufReader::new(file);
+                    for line in reader.lines() {
+                        if let Ok(domain) = line {
+                            let domain = domain.trim();
+                            if !domain.is_empty() && !domain.starts_with('#') {
+                                domains.insert(domain.to_string());
+                            }
                         }
                     }
                 }

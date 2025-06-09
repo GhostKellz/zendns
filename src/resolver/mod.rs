@@ -33,6 +33,13 @@ pub fn start(config: &Config, blocklist: &Blocklist) {
     if enable_doh {
         tokio::spawn(doh::run_doh_server(blocklist_arc.clone(), cache.clone()));
     }
+
+    // Start root hints update task
+    let validator = DnssecValidator::new();
+    tokio::spawn(async move {
+        validator.update_root_hints().await;
+        // Optionally: loop with interval for periodic update
+    });
 }
 
 // DNSSEC validator stub

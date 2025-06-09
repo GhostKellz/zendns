@@ -4,7 +4,7 @@ use std::fs;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub blocklist_file: PathBuf,
+    pub blocklist_sources: Option<Vec<String>>, // URLs or file paths
     pub listen_addr: String,
     pub upstream_addr: String,
     pub tls_cert: Option<PathBuf>,
