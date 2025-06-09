@@ -1,13 +1,14 @@
 use tokio::net::UdpSocket;
 use crate::blocklist::Blocklist;
 use crate::resolver::DnsCache;
+use crate::resolver::DnssecValidator;
 use trust_dns_proto::op::Message;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
 pub type CachedResponse = (Vec<u8>, Instant);
 
-pub async fn run_udp_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>) {
+pub async fn run_udp_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>, dnssec: Arc<DnssecValidator>) {
     println!("UDP DNS server running (async)");
     let socket = UdpSocket::bind("0.0.0.0:5353").await.expect("Failed to bind UDP socket");
     let mut buf = [0u8; 512];
@@ -45,7 +46,12 @@ pub async fn run_udp_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>) {
                 let mut upstream_buf = [0u8; 512];
                 if let Ok((up_size, _)) = upstream_socket.recv_from(&mut upstream_buf).await {
                     let response = upstream_buf[..up_size].to_vec();
-                    // 4. Cache response with TTL (e.g., 60s)
+                    // 4. DNSSEC validation
+                    if !dnssec.validate(&response) {
+                        // DNSSEC validation failed
+                        continue;
+                    }
+                    // 5. Cache response with TTL (e.g., 60s)
                     let expiry = Instant::now() + Duration::from_secs(60);
                     cache.insert(domain.clone(), (response.clone(), expiry));
                     socket.send_to(&response, &src).await.ok();

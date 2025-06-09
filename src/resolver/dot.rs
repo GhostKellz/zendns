@@ -2,13 +2,14 @@ use tokio_rustls::TlsAcceptor;
 use tokio::net::TcpListener;
 use crate::blocklist::Blocklist;
 use crate::resolver::DnsCache;
+use crate::resolver::DnssecValidator;
 use trust_dns_proto::op::Message;
 use std::sync::Arc;
 use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::time::{Duration, Instant};
 
-pub async fn run_dot_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>) {
+pub async fn run_dot_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>, dnssec: Arc<DnssecValidator>) {
     println!("DoT server running (async)");
     // Load TLS certificate and key (replace with your own paths)
     let certs = load_certs("cert.pem");
@@ -25,6 +26,7 @@ pub async fn run_dot_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>) {
         let acceptor = acceptor.clone();
         let blocklist = blocklist.clone();
         let cache = cache.clone();
+        let dnssec = dnssec.clone();
         tokio::spawn(async move {
             if let Ok(mut tls_stream) = acceptor.accept(stream).await {
                 let mut buf = [0u8; 512];
@@ -56,7 +58,12 @@ pub async fn run_dot_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>) {
                         let mut upstream_buf = [0u8; 512];
                         if let Ok((up_size, _)) = upstream_socket.recv_from(&mut upstream_buf).await {
                             let response = upstream_buf[..up_size].to_vec();
-                            // 4. Cache response with TTL (e.g., 60s)
+                            // 4. DNSSEC validation
+                            if !dnssec.validate(&response) {
+                                // DNSSEC validation failed
+                                return;
+                            }
+                            // 5. Cache response with TTL (e.g., 60s)
                             let expiry = Instant::now() + Duration::from_secs(60);
                             cache.insert(domain.clone(), (response.clone(), expiry));
                             tls_stream.write_all(&response).await.ok();

@@ -24,20 +24,23 @@ pub fn start(config: &Config, blocklist: &Blocklist) {
     let enable_dot = config.enable_dot.unwrap_or(false);
     let enable_doh = config.enable_doh.unwrap_or(false);
 
+    let validator = DnssecValidator::new();
+    let dnssec = Arc::new(validator);
+
     if enable_udp {
-        tokio::spawn(udp::run_udp_server(blocklist_arc.clone(), cache.clone()));
+        tokio::spawn(udp::run_udp_server(blocklist_arc.clone(), cache.clone(), dnssec.clone()));
     }
     if enable_dot {
-        tokio::spawn(dot::run_dot_server(blocklist_arc.clone(), cache.clone()));
+        tokio::spawn(dot::run_dot_server(blocklist_arc.clone(), cache.clone(), dnssec.clone()));
     }
     if enable_doh {
-        tokio::spawn(doh::run_doh_server(blocklist_arc.clone(), cache.clone()));
+        tokio::spawn(doh::run_doh_server(blocklist_arc.clone(), cache.clone(), dnssec.clone()));
     }
 
     // Start root hints update task
-    let validator = DnssecValidator::new();
+    let validator2 = dnssec.clone();
     tokio::spawn(async move {
-        validator.update_root_hints().await;
+        validator2.update_root_hints().await;
         // Optionally: loop with interval for periodic update
     });
 }
