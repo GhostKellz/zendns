@@ -1,9 +1,7 @@
 # zendns
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/youruser/zendns/ci.yml?branch=main&label=build)](https://github.com/youruser/zendns/actions)
-[![Crates.io](https://img.shields.io/crates/v/zendns?label=crates.io)](https://crates.io/crates/zendns)
-[![codecov](https://img.shields.io/codecov/c/github/youruser/zendns?label=coverage)](https://codecov.io/gh/youruser/zendns)
-[![Arch Linux](https://img.shields.io/badge/arch-linux-blue?logo=arch-linux)](https://archlinux.org/)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/ghostkellz/zendns/ci.yml?branch=main&label=build)](https://github.com/youruser/zendns/actions)
+
 
 A blazing fast, async, DNS-over-UDP/DoT/DoH resolver for Arch Linux workstations, with:
 - **DNSSEC** validation (secure by default)
