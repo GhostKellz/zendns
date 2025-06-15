@@ -119,31 +119,16 @@ impl DnssecValidator {
         }
     }
 
-    pub fn validate(&self, response: &[u8]) -> bool {
-        use trust_dns_proto::op::Message;
-        use trust_dns_proto::rr::{RecordType, RData};
-   //     use trust_dns_proto::serialize::binary::BinDecodable;
-        let message = match Message::from_vec(response) {
-            Ok(m) => m,
-            Err(_) => return false,
-        };
-        // Check for RRSIG in DNSSEC
-        let has_rrsig = message.answers().iter().any(|rr| {
-            match rr.data() {
-                Some(RData::DNSSEC(dnssec)) => matches!(dnssec, trust_dns_proto::rr::dnssec::rdata::DNSSECRData::RRSIG(_)),
-                _ => false,
-            }
-        });
-        let has_dnskey = message.answers().iter().any(|rr| rr.record_type() == RecordType::DNSKEY);
-        if !has_rrsig || !has_dnskey {
-            return false;
-        }
-        true
-    }
-
     pub async fn validate_async(&self, domain: &str, record_type: trust_dns_resolver::proto::rr::RecordType) -> bool {
         use trust_dns_resolver::TokioAsyncResolver;
         use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+        
+        // If we have no trust anchors loaded, skip DNSSEC validation
+        if self.trust_anchors.is_empty() {
+            println!("[DNSSEC] No trust anchors loaded, skipping validation for {}", domain);
+            return true; // Allow queries when no trust anchors are configured
+        }
+        
         // Create a resolver with DNSSEC enabled
         let mut opts = ResolverOpts::default();
         opts.validate = true; // Enable DNSSEC validation
@@ -153,8 +138,14 @@ impl DnssecValidator {
 
         // Perform a lookup with DNSSEC
         match resolver.lookup(domain, record_type).await {
-            Ok(_lookup) => true,
-            Err(_) => false,
+            Ok(_lookup) => {
+                println!("[DNSSEC] Validation passed for {}", domain);
+                true
+            },
+            Err(e) => {
+                println!("[DNSSEC] Validation failed for {}: {}", domain, e);
+                false
+            }
         }   
     }
 }
