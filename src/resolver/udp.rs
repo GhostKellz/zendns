@@ -2,15 +2,14 @@ use tokio::net::UdpSocket;
 use crate::blocklist::Blocklist;
 use crate::resolver::DnsCache;
 use crate::resolver::DnssecValidator;
+use crate::config::Config;
 use trust_dns_proto::op::Message;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-pub type CachedResponse = (Vec<u8>, Instant);
-
-pub async fn run_udp_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>, dnssec: Arc<DnssecValidator>) {
-    println!("UDP DNS server running (async)");
-    let socket = UdpSocket::bind("0.0.0.0:5353").await.expect("Failed to bind UDP socket");
+pub async fn run_udp_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>, dnssec: Arc<DnssecValidator>, config: &Config) {
+    println!("UDP DNS server running on {}", config.listen_addr);
+    let socket = UdpSocket::bind(&config.listen_addr).await.expect("Failed to bind UDP socket");
     let mut buf = [0u8; 512];
     loop {
         if let Ok((size, src)) = socket.recv_from(&mut buf).await {
@@ -40,16 +39,17 @@ pub async fn run_udp_server(blocklist: Arc<Blocklist>, cache: Arc<DnsCache>, dns
                     continue;
                 }
                 // 3. Forward to upstream DNS server
-                let upstream_addr = "8.8.8.8:53";
                 let upstream_socket = UdpSocket::bind("0.0.0.0:0").await.expect("Failed to bind upstream socket");
-                upstream_socket.send_to(query_bytes, upstream_addr).await.ok();
+                upstream_socket.send_to(query_bytes, &config.upstream_addr).await.ok();
                 let mut upstream_buf = [0u8; 512];
                 if let Ok((up_size, _)) = upstream_socket.recv_from(&mut upstream_buf).await {
                     let response = upstream_buf[..up_size].to_vec();
-                    // 4. DNSSEC validation
-                    if !dnssec.validate(&response) {
-                        // DNSSEC validation failed
-                        continue;
+                    // 4. DNSSEC validation using async validator
+                    if let Some(query) = message.queries().get(0) {
+                        if !dnssec.validate_async(&domain, query.query_type()).await {
+                            // DNSSEC validation failed
+                            continue;
+                        }
                     }
                     // 5. Cache response with TTL (e.g., 60s)
                     let expiry = Instant::now() + Duration::from_secs(60);

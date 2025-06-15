@@ -4,7 +4,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::collections::HashSet;
 use std::time::Instant;
-use reqwest;
 use crate::blocklist::Blocklist;
 use crate::config::Config;
 
@@ -15,7 +14,7 @@ pub mod doh;
 // DnsCache is just the DashMap, not Arc
 pub type DnsCache = DashMap<String, (Vec<u8>, Instant)>;
 
-pub fn start(config: &Config, blocklist: &Blocklist) {
+pub async fn start(config: &Config, blocklist: &Blocklist) {
     let cache: Arc<DnsCache> = Arc::new(DashMap::new());
     let blocklist_arc: Arc<Blocklist> = Arc::new(blocklist.clone());
     println!("Starting DNS resolver...");
@@ -28,14 +27,39 @@ pub fn start(config: &Config, blocklist: &Blocklist) {
     let dnssec = Arc::new(validator);
 
     if enable_udp {
-        tokio::spawn(udp::run_udp_server(blocklist_arc.clone(), cache.clone(), dnssec.clone()));
+        let blocklist_clone = blocklist_arc.clone();
+        let cache_clone = cache.clone();
+        let dnssec_clone = dnssec.clone();
+        let config_clone = config.clone();
+        tokio::spawn(async move {
+            udp::run_udp_server(blocklist_clone, cache_clone, dnssec_clone, &config_clone).await;
+        });
     }
     if enable_dot {
-        tokio::spawn(dot::run_dot_server(blocklist_arc.clone(), cache.clone(), dnssec.clone()));
+        let blocklist_clone = blocklist_arc.clone();
+        let cache_clone = cache.clone();
+        let dnssec_clone = dnssec.clone();
+        let config_clone = config.clone();
+        tokio::spawn(async move {
+            dot::run_dot_server(blocklist_clone, cache_clone, dnssec_clone, &config_clone).await;
+        });
     }
     if enable_doh {
-        tokio::spawn(doh::run_doh_server(blocklist_arc.clone(), cache.clone(), dnssec.clone()));
+        let blocklist_clone = blocklist_arc.clone();
+        let cache_clone = cache.clone();
+        let dnssec_clone = dnssec.clone();
+        let config_clone = config.clone();
+        tokio::spawn(async move {
+            doh::run_doh_server(blocklist_clone, cache_clone, dnssec_clone, &config_clone).await;
+        });
     }
+
+    // Start periodic blocklist update task
+    let blocklist_for_update = blocklist_arc.clone();
+    let blocklist_sources = config.blocklist_sources.clone().unwrap_or_default();
+    tokio::spawn(async move {
+        blocklist_for_update.periodic_update(blocklist_sources).await;
+    });
 
     // Start root hints update task
     let validator2 = dnssec.clone();
@@ -43,6 +67,11 @@ pub fn start(config: &Config, blocklist: &Blocklist) {
         validator2.update_root_hints().await;
         // Optionally: loop with interval for periodic update
     });
+
+    // Keep the main thread alive
+    println!("DNS resolver started successfully. Press Ctrl+C to stop.");
+    tokio::signal::ctrl_c().await.expect("Failed to listen for ctrl_c");
+    println!("Shutting down DNS resolver...");
 }
 
 // DNSSEC validator stub
@@ -75,19 +104,18 @@ impl DnssecValidator {
     }
 
     pub async fn update_root_hints(&self) {
-        // Download root hints file (e.g., https://www.internic.net/domain/named.root)
+        // Download root hints file from IANA
         let url = "https://www.internic.net/domain/named.root";
-        match reqwest::get(url).await {
-            Ok(resp) => {
-                if let Ok(text) = resp.text().await {
-                    if let Err(e) = fs::write(&self.root_hints_path, &text) {
-                        eprintln!("Failed to write root hints: {}", e);
-                    } else {
-                        println!("Updated root hints at {:?}", &self.root_hints_path);
-                    }
+        if let Ok(resp) = reqwest::get(url).await {
+            if let Ok(text) = resp.text().await {
+                if let Err(e) = fs::write(&self.root_hints_path, &text) {
+                    eprintln!("Failed to write root hints: {}", e);
+                } else {
+                    println!("Updated root hints at {:?}", &self.root_hints_path);
                 }
             }
-            Err(e) => eprintln!("Failed to download root hints: {}", e),
+        } else {
+            eprintln!("Failed to download root hints from {}", url);
         }
     }
 
@@ -119,6 +147,8 @@ impl DnssecValidator {
         // Create a resolver with DNSSEC enabled
         let mut opts = ResolverOpts::default();
         opts.validate = true; // Enable DNSSEC validation
+        
+        // TokioAsyncResolver::tokio returns the resolver directly, not a Result
         let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), opts);
 
         // Perform a lookup with DNSSEC

@@ -14,3 +14,4 @@ serde = { version = "1", features = ["derive"] }
 toml = "0.7"
 dirs = "5"
 tokio-rustls = "0.24"
+rustls-pemfile = "1"

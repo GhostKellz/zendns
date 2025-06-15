@@ -2,17 +2,18 @@ use std::path::PathBuf;
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub blocklist_sources: Option<Vec<String>>, // URLs or file paths
-    pub listen_addr: String,
+    pub listen_addr: String,      // UDP listen address
+    pub dot_listen_addr: Option<String>, // DoT listen address (default: 853)
+    pub doh_listen_addr: Option<String>, // DoH listen address (default: 8443)
     pub upstream_addr: String,
     pub tls_cert: Option<PathBuf>,
     pub tls_key: Option<PathBuf>,
     pub enable_udp: Option<bool>,
     pub enable_dot: Option<bool>,
     pub enable_doh: Option<bool>,
-    // Add more settings as needed
 }
 
 impl Config {

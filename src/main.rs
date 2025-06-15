@@ -2,13 +2,13 @@ mod config;
 mod blocklist;
 mod resolver;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // Load config
     let config = config::Config::load();
     // Initialize blocklist (async)
     let blocklist_sources = config.blocklist_sources.clone().unwrap_or_default();
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let blocklist = rt.block_on(blocklist::Blocklist::load(&blocklist_sources));
+    let blocklist = blocklist::Blocklist::load(&blocklist_sources).await;
     // Start resolver
-    resolver::start(&config, &blocklist);
+    resolver::start(&config, &blocklist).await;
 }

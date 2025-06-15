@@ -34,9 +34,11 @@ zendns
 ## Configuration
 See [DOCS.md](./DOCS.md) for full details. Example:
 ```toml
-listen_addr = "127.0.0.1:53"
+listen_addr = "127.0.0.1:53"      # UDP DNS server
+dot_listen_addr = "127.0.0.1:853" # DoT server  
+doh_listen_addr = "127.0.0.1:8443" # DoH server
 upstream_addr = "1.1.1.1:53"
-blocklist_file = "/etc/zendns/blocklist.toml"
+blocklist_sources = ["https://someonewhocares.org/hosts/zero/hosts"]
 # tls_cert = "/etc/zendns/cert.pem"
 # tls_key = "/etc/zendns/key.pem"
 ```

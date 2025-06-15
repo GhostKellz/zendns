@@ -1,11 +1,9 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time;
-use tokio::signal::unix::{signal, SignalKind};
 
 /// Thread-safe blocklist of domains
 #[derive(Clone)]
@@ -51,54 +49,54 @@ impl Blocklist {
         self.domains.lock().unwrap().contains(domain)
     }
 
-    /// Periodically updates blocklist from URLs in a blocklist file
-    pub async fn periodic_update(
-        blocklist_path: PathBuf,
-        interval_secs: u64,
-        blocklist: Arc<Mutex<HashSet<String>>>,
-    ) {
-        use reqwest;
-        let mut sighup = signal(SignalKind::hangup()).expect("Failed to register SIGHUP handler");
+    /// Periodically updates blocklist from the original sources
+    pub async fn periodic_update(&self, sources: Vec<String>) {
+        let interval_secs = 3600; // Update every hour
+        
         loop {
-            // Read blocklist.toml for URLs
-            let urls = if let Ok(content) = std::fs::read_to_string(&blocklist_path) {
-                content
-                    .lines()
-                    .map(|l| l.trim())
-                    .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                    .map(|l| l.to_string())
-                    .collect::<Vec<_>>()
-            } else {
-                vec![]
-            };
+            println!("[blocklist] Periodic update check - refreshing from {} sources", sources.len());
+            
             let mut new_domains = HashSet::new();
-            for url in urls {
-                match reqwest::get(&url).await {
-                    Ok(resp) => {
-                        if let Ok(text) = resp.text().await {
-                            for line in text.lines() {
-                                let domain = line.trim();
+            for src in &sources {
+                if src.starts_with("http://") || src.starts_with("https://") {
+                    match reqwest::get(src).await {
+                        Ok(resp) => {
+                            if let Ok(text) = resp.text().await {
+                                for line in text.lines() {
+                                    let domain = line.trim();
+                                    if !domain.is_empty() && !domain.starts_with('#') {
+                                        new_domains.insert(domain.to_string());
+                                    }
+                                }
+                                println!("[blocklist] Updated from URL: {}", src);
+                            }
+                        }
+                        Err(e) => eprintln!("[blocklist] Failed to fetch {}: {}", src, e),
+                    }
+                } else {
+                    if let Ok(file) = File::open(src) {
+                        let reader = BufReader::new(file);
+                        for line in reader.lines() {
+                            if let Ok(domain) = line {
+                                let domain = domain.trim();
                                 if !domain.is_empty() && !domain.starts_with('#') {
                                     new_domains.insert(domain.to_string());
                                 }
                             }
                         }
+                        println!("[blocklist] Updated from file: {}", src);
                     }
-                    Err(e) => eprintln!("[blocklist] Failed to fetch {}: {}", url, e),
                 }
             }
+            
             // Atomically replace the in-memory blocklist
             {
-                let mut guard = blocklist.lock().unwrap();
+                let mut guard = self.domains.lock().unwrap();
                 *guard = new_domains;
-                println!("[blocklist] Updated in-memory blocklist");
+                println!("[blocklist] Updated in-memory blocklist with fresh data");
             }
-            tokio::select! {
-                _ = time::sleep(Duration::from_secs(interval_secs)) => {},
-                _ = sighup.recv() => {
-                    println!("[blocklist] Received SIGHUP, reloading blocklist immediately");
-                }
-            }
+            
+            time::sleep(Duration::from_secs(interval_secs)).await;
         }
     }
 }

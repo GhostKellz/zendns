@@ -1,0 +1,22 @@
+# ZenDNS Test Configuration
+# Place at ~/.config/zendns/config.toml for testing
+
+# Blocklist sources for ad/malware blocking
+blocklist_sources = [
+    "https://someonewhocares.org/hosts/zero/hosts"
+]
+
+# Network configuration - using non-privileged ports for testing
+listen_addr = "127.0.0.1:5353"     # UDP DNS server (non-privileged port)
+dot_listen_addr = "127.0.0.1:8853" # DoT server (non-privileged port)
+doh_listen_addr = "127.0.0.1:8443" # DoH server (non-privileged port)
+upstream_addr = "1.1.1.1:53"       # Cloudflare DNS
+
+# Protocol configuration - enable only UDP by default for testing
+enable_udp = true
+enable_dot = false  # Requires TLS cert/key
+enable_doh = false  # Requires TLS cert/key
+
+# TLS configuration (uncomment and set paths when enabling DoT/DoH)
+# tls_cert = "/path/to/your/cert.pem"
+# tls_key = "/path/to/your/key.pem"
