@@ -1,6 +1,8 @@
 # zendns
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/ghostkellz/zendns/ci.yml?branch=main&label=build)](https://github.com/youruser/zendns/actions)
+![DoT/DoH Secure](https://img.shields.io/badge/DoT%2FDoH-Secure-blueviolet)
+![Cloudflare DNS Ready](https://img.shields.io/badge/Cloudflare%20DNS-Ready-orange)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/ghostkellz/zendns/ci.yml?branch=main)](https://github.com/ghostkellz/zendns/actions)
 
 
 A blazing fast, async, DNS-over-UDP/DoT/DoH resolver for Arch Linux workstations, with:
