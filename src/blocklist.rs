@@ -27,21 +27,19 @@ impl Blocklist {
                         }
                     }
                 }
-            } else {
-                if let Ok(file) = File::open(src) {
-                    let reader = BufReader::new(file);
-                    for line in reader.lines() {
-                        if let Ok(domain) = line {
-                            let domain = domain.trim();
-                            if !domain.is_empty() && !domain.starts_with('#') {
-                                domains.insert(domain.to_string());
-                            }
-                        }
+            } else if let Ok(file) = File::open(src) {
+                let reader = BufReader::new(file);
+                for domain in reader.lines().map_while(Result::ok) {
+                    let domain = domain.trim();
+                    if !domain.is_empty() && !domain.starts_with('#') {
+                        domains.insert(domain.to_string());
                     }
                 }
             }
         }
-        Blocklist { domains: Arc::new(Mutex::new(domains)) }
+        Blocklist {
+            domains: Arc::new(Mutex::new(domains)),
+        }
     }
 
     /// Checks if a domain is blocked
@@ -52,10 +50,13 @@ impl Blocklist {
     /// Periodically updates blocklist from the original sources
     pub async fn periodic_update(&self, sources: Vec<String>) {
         let interval_secs = 3600; // Update every hour
-        
+
         loop {
-            println!("[blocklist] Periodic update check - refreshing from {} sources", sources.len());
-            
+            println!(
+                "[blocklist] Periodic update check - refreshing from {} sources",
+                sources.len()
+            );
+
             let mut new_domains = HashSet::new();
             for src in &sources {
                 if src.starts_with("http://") || src.starts_with("https://") {
@@ -73,29 +74,25 @@ impl Blocklist {
                         }
                         Err(e) => eprintln!("[blocklist] Failed to fetch {}: {}", src, e),
                     }
-                } else {
-                    if let Ok(file) = File::open(src) {
-                        let reader = BufReader::new(file);
-                        for line in reader.lines() {
-                            if let Ok(domain) = line {
-                                let domain = domain.trim();
-                                if !domain.is_empty() && !domain.starts_with('#') {
-                                    new_domains.insert(domain.to_string());
-                                }
-                            }
+                } else if let Ok(file) = File::open(src) {
+                    let reader = BufReader::new(file);
+                    for domain in reader.lines().map_while(Result::ok) {
+                        let domain = domain.trim();
+                        if !domain.is_empty() && !domain.starts_with('#') {
+                            new_domains.insert(domain.to_string());
                         }
-                        println!("[blocklist] Updated from file: {}", src);
                     }
+                    println!("[blocklist] Updated from file: {}", src);
                 }
             }
-            
+
             // Atomically replace the in-memory blocklist
             {
                 let mut guard = self.domains.lock().unwrap();
                 *guard = new_domains;
                 println!("[blocklist] Updated in-memory blocklist with fresh data");
             }
-            
+
             time::sleep(Duration::from_secs(interval_secs)).await;
         }
     }

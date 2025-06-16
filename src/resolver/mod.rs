@@ -1,15 +1,15 @@
-use dashmap::DashMap;
-use std::sync::Arc;
-use std::fs;
-use std::path::PathBuf;
-use std::collections::HashSet;
-use std::time::Instant;
 use crate::blocklist::Blocklist;
 use crate::config::Config;
+use dashmap::DashMap;
+use std::collections::HashSet;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Instant;
 
-pub mod udp;
-pub mod dot;
 pub mod doh;
+pub mod dot;
+pub mod udp;
 
 // DnsCache is just the DashMap, not Arc
 pub type DnsCache = DashMap<String, (Vec<u8>, Instant)>;
@@ -58,7 +58,9 @@ pub async fn start(config: &Config, blocklist: &Blocklist) {
     let blocklist_for_update = blocklist_arc.clone();
     let blocklist_sources = config.blocklist_sources.clone().unwrap_or_default();
     tokio::spawn(async move {
-        blocklist_for_update.periodic_update(blocklist_sources).await;
+        blocklist_for_update
+            .periodic_update(blocklist_sources)
+            .await;
     });
 
     // Start root hints update task
@@ -70,7 +72,9 @@ pub async fn start(config: &Config, blocklist: &Blocklist) {
 
     // Keep the main thread alive
     println!("DNS resolver started successfully. Press Ctrl+C to stop.");
-    tokio::signal::ctrl_c().await.expect("Failed to listen for ctrl_c");
+    tokio::signal::ctrl_c()
+        .await
+        .expect("Failed to listen for ctrl_c");
     println!("Shutting down DNS resolver...");
 }
 
@@ -87,7 +91,10 @@ impl DnssecValidator {
         let root_key_path = home.join(".config/zendns/root.key");
         let root_hints_path = home.join(".config/zendns/root.hints");
         let trust_anchors = Self::load_trust_anchors(&root_key_path);
-        DnssecValidator { trust_anchors, root_hints_path }
+        DnssecValidator {
+            trust_anchors,
+            root_hints_path,
+        }
     }
 
     fn load_trust_anchors(path: &PathBuf) -> HashSet<String> {
@@ -119,20 +126,27 @@ impl DnssecValidator {
         }
     }
 
-    pub async fn validate_async(&self, domain: &str, record_type: trust_dns_resolver::proto::rr::RecordType) -> bool {
+    pub async fn validate_async(
+        &self,
+        domain: &str,
+        record_type: trust_dns_resolver::proto::rr::RecordType,
+    ) -> bool {
         use trust_dns_resolver::TokioAsyncResolver;
         use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-        
+
         // If we have no trust anchors loaded, skip DNSSEC validation
         if self.trust_anchors.is_empty() {
-            println!("[DNSSEC] No trust anchors loaded, skipping validation for {}", domain);
+            println!(
+                "[DNSSEC] No trust anchors loaded, skipping validation for {}",
+                domain
+            );
             return true; // Allow queries when no trust anchors are configured
         }
-        
+
         // Create a resolver with DNSSEC enabled
         let mut opts = ResolverOpts::default();
         opts.validate = true; // Enable DNSSEC validation
-        
+
         // TokioAsyncResolver::tokio returns the resolver directly, not a Result
         let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), opts);
 
@@ -141,11 +155,11 @@ impl DnssecValidator {
             Ok(_lookup) => {
                 println!("[DNSSEC] Validation passed for {}", domain);
                 true
-            },
+            }
             Err(e) => {
                 println!("[DNSSEC] Validation failed for {}: {}", domain, e);
                 false
             }
-        }   
+        }
     }
 }

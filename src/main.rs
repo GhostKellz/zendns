@@ -1,5 +1,5 @@
-mod config;
 mod blocklist;
+mod config;
 mod resolver;
 
 #[tokio::main]
